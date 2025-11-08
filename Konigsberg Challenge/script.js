@@ -10,6 +10,7 @@ const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 const statusText = document.getElementById("status");
 const resetBtn = document.getElementById("resetBtn");
+const undoBtn = document.getElementById("undoBtn"); 
 
 // sub-node layout 
 const nodes = [
@@ -66,13 +67,13 @@ const landCenters = {
 // colors
 const backgroundColor = "#007bff";
 const bridgeColor = "gold";
-const usedBridgeColor = "#555";
 const nodeColor = "#8B4513";
 const textColor = "#000";
 const landOutline = "#000";
 
 let currentNode = null;
 let usedBridges = [];
+let moveHistory = []; 
 
 // get node by ID
 function getNode(id) {
@@ -101,7 +102,6 @@ function drawGame() {
     ctx.fill();
     ctx.stroke();
 
-    // label
     ctx.fillStyle = "#000";
     ctx.font = "bold 20px Arial";
     ctx.textAlign = "center";
@@ -114,8 +114,7 @@ function drawGame() {
     const a = getNode(b.from);
     const c = getNode(b.to);
     const used = usedBridges.includes(b.num);
-
-    if (used) return; // skip used bridges (they disappear)
+    if (used) return;
 
     ctx.beginPath();
     ctx.moveTo(a.x, a.y);
@@ -135,11 +134,8 @@ function drawGame() {
   // highlight next valid node
   if (currentNode) {
     const currentLand = getLandFromNode(currentNode.id);
-
-    // available sub-nodes in current land
     const sameLandNodes = landGroups[currentLand];
 
-    // find all bridges from any node in this land
     const nextMoves = bridges.filter(
       b =>
         !usedBridges.includes(b.num) &&
@@ -181,18 +177,13 @@ canvas.addEventListener("click", e => {
   const clicked = nodes.find(n => Math.hypot(n.x - x, n.y - y) < 10);
   if (!clicked) return;
 
-  // starting the game
   if (!currentNode) {
     currentNode = clicked;
-    statusText.textContent = `Started at ${clicked.id}`;
     drawGame();
     return;
   }
 
   const currentLand = getLandFromNode(currentNode.id);
-  const clickedLand = getLandFromNode(clicked.id);
-
-  // allow crossing only if there is a valid bridge between lands
   const sameLandNodes = landGroups[currentLand];
 
   const bridge = bridges.find(
@@ -204,17 +195,16 @@ canvas.addEventListener("click", e => {
 
   if (bridge) {
     usedBridges.push(bridge.num);
+    moveHistory.push({
+      bridgeNum: bridge.num,
+      previousNodeId: currentNode.id
+    });
 
-    // move to the new land group
     const landedLand = getLandFromNode(
       sameLandNodes.includes(bridge.from) ? bridge.to : bridge.from
     );
-    const newStartNodeId = landGroups[landedLand][0]; // pick any sub-node of new land
+    const newStartNodeId = landGroups[landedLand][0];
     currentNode = getNode(newStartNodeId);
-
-    statusText.textContent = `Crossed bridge #${bridge.num} → Arrived at Land ${landedLand}`;
-  } else {
-    statusText.textContent = `No available bridge to cross from Land ${currentLand}`;
   }
 
   // eulerian path validation
@@ -227,19 +217,34 @@ canvas.addEventListener("click", e => {
 
     const oddNodes = Object.keys(degrees).filter(k => degrees[k] % 2 !== 0);
     if (oddNodes.length === 0) {
-      statusText.textContent = "🎉 Eulerian circuit completed! You returned to your starting point!";
+      statusText.textContent = "🎉 Eulerian circuit completed!";
     } else if (oddNodes.length === 2) {
       const validEnds =
         currentNode.id === oddNodes[0] || currentNode.id === oddNodes[1];
       statusText.textContent = validEnds
         ? "🎉 Eulerian path completed successfully!"
-        : "⚠️ All bridges used, but you ended at an invalid node!";
+        : "⚠️ All bridges used, but ended at an invalid node!";
     } else {
       statusText.textContent =
-        "⚠️ All bridges used, but this graph doesn’t have a valid Eulerian path!";
+        "⚠️ All bridges used, but no valid Eulerian path!";
     }
   }
 
+  drawGame();
+});
+
+// undo button function
+undoBtn.addEventListener("click", () => {
+  if (moveHistory.length === 0) {
+    statusText.textContent = "No moves to undo.";
+    return;
+  }
+
+  const lastMove = moveHistory.pop();
+  usedBridges = usedBridges.filter(b => b !== lastMove.bridgeNum);
+  currentNode = getNode(lastMove.previousNodeId);
+
+  statusText.textContent = "Last move undone.";
   drawGame();
 });
 
@@ -247,6 +252,7 @@ canvas.addEventListener("click", e => {
 resetBtn.addEventListener("click", () => {
   usedBridges = [];
   currentNode = null;
+  moveHistory = [];
   statusText.textContent = "Game reset.";
   drawGame();
 });
