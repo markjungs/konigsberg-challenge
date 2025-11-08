@@ -56,7 +56,7 @@ const landGroups = {
   D: ["D1", "D2", "D3", "D5", "D6"]
 };
 
-// main nodes (center points)
+// main node centers
 const landCenters = {
   A: { x: 250, y: 250 },
   B: { x: 655, y: 250 },
@@ -71,10 +71,11 @@ const nodeColor = "#8B4513";
 const textColor = "#000";
 const landOutline = "#000";
 
-let currentLand = null;   
-let currentNode = null;  
+let currentLand = null;
+let currentNode = null;
 let usedBridges = [];
 let moveHistory = [];
+let gameOver = false;
 
 // helpers
 function getNode(id) {
@@ -83,12 +84,21 @@ function getNode(id) {
 function getLandFromNode(nodeId) {
   return nodeId.charAt(0);
 }
+function checkIfStranded(land) {
+  const landNodes = landGroups[land];
+  const available = bridges.some(
+    b =>
+      !usedBridges.includes(b.num) &&
+      (landNodes.includes(b.from) || landNodes.includes(b.to))
+  );
+  return !available;
+}
 
 function drawGame() {
   ctx.fillStyle = backgroundColor;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // main lands
+  // draw lands
   Object.entries(landCenters).forEach(([label, pos]) => {
     const { x, y } = pos;
     const size = label === "D" ? 70 : 45;
@@ -107,7 +117,7 @@ function drawGame() {
     ctx.fillText(label, x, y);
   });
 
-  // bridges
+  // draw bridges
   bridges.forEach(b => {
     const a = getNode(b.from);
     const c = getNode(b.to);
@@ -128,15 +138,14 @@ function drawGame() {
     ctx.fillText(b.num, midX + 5, midY - 5);
   });
 
-  // highlight sub-node options after first move
-  if (currentLand && currentNode) {
+  // highlight sub-node choices
+  if (!gameOver && currentLand && currentNode) {
     const sameLandNodes = landGroups[currentLand];
     const nextMoves = bridges.filter(
       b =>
         !usedBridges.includes(b.num) &&
         (sameLandNodes.includes(b.from) || sameLandNodes.includes(b.to))
     );
-
     nextMoves.forEach(b => {
       const nextId = sameLandNodes.includes(b.from) ? b.to : b.from;
       const n = getNode(nextId);
@@ -148,7 +157,7 @@ function drawGame() {
     });
   }
 
-  // sub-nodes (draw small dots)
+  // draw sub-nodes
   nodes.forEach(n => {
     ctx.beginPath();
     ctx.arc(n.x, n.y, 6, 0, Math.PI * 2);
@@ -164,17 +173,19 @@ function drawGame() {
 }
 
 canvas.addEventListener("click", e => {
+  if (gameOver) return;
+
   const rect = canvas.getBoundingClientRect();
   const x = e.clientX - rect.left;
   const y = e.clientY - rect.top;
 
-  // detect if a main land clicked
+  // detect land click
   const clickedLand = Object.entries(landCenters).find(
-    ([, pos]) => Math.hypot(pos.x - x, pos.y - y) < (pos.label === "D" ? 70 : 45)
+    ([, pos]) => Math.hypot(pos.x - x, pos.y - y) < 45
   );
   const clickedNode = nodes.find(n => Math.hypot(n.x - x, n.y - y) < 10);
 
-  // click any land to start the game  
+  // start
   if (!currentLand && clickedLand) {
     currentLand = clickedLand[0];
     currentNode = getNode(landGroups[currentLand][0]);
@@ -182,7 +193,7 @@ canvas.addEventListener("click", e => {
     return;
   }
 
-  // click sub-node to cross bridge
+  // after starting
   if (currentLand && clickedNode) {
     const sameLandNodes = landGroups[currentLand];
 
@@ -206,16 +217,23 @@ canvas.addEventListener("click", e => {
       );
       currentLand = landedLand;
       currentNode = getNode(landGroups[landedLand][0]);
+
+      // check stranded condition
+      if (checkIfStranded(currentLand) && usedBridges.length < bridges.length) {
+        gameOver = true;
+        statusText.textContent = `🏝️ You failed! You are stranded on Land ${currentLand}.`;
+      }
     }
 
-    // check completion
-    if (usedBridges.length === bridges.length) {
+    // check win condition
+    if (!gameOver && usedBridges.length === bridges.length) {
       const degrees = {};
       bridges.forEach(b => {
         degrees[b.from] = (degrees[b.from] || 0) + 1;
         degrees[b.to] = (degrees[b.to] || 0) + 1;
       });
       const oddNodes = Object.keys(degrees).filter(k => degrees[k] % 2 !== 0);
+      gameOver = true;
       if (oddNodes.length === 0)
         statusText.textContent = "🎉 Eulerian circuit completed!";
       else if (oddNodes.length === 2)
@@ -227,18 +245,15 @@ canvas.addEventListener("click", e => {
   }
 });
 
-// undo
+// Undo
 undoBtn.addEventListener("click", () => {
-  if (moveHistory.length === 0) {
-    statusText.textContent = "No moves to undo.";
-    return;
-  }
-
+  if (moveHistory.length === 0) return;
   const lastMove = moveHistory.pop();
   usedBridges = usedBridges.filter(b => b !== lastMove.bridgeNum);
   currentNode = getNode(lastMove.previousNodeId);
   currentLand = lastMove.previousLand;
-  statusText.textContent = "Last move undone.";
+  gameOver = false;
+  statusText.textContent = "";
   drawGame();
 });
 
@@ -248,7 +263,8 @@ resetBtn.addEventListener("click", () => {
   currentNode = null;
   currentLand = null;
   moveHistory = [];
-  statusText.textContent = "Game reset.";
+  gameOver = false;
+  statusText.textContent = "";
   drawGame();
 });
 
