@@ -30,11 +30,11 @@ const nodes = [
   { id: "C7", x: 475, y: 100 },
 
   // D-land
-  { id: "D1", x: 420, y: 440 },
-  { id: "D2", x: 420, y: 490 },
-  { id: "D3", x: 450, y: 420 },
-  { id: "D5", x: 480, y: 490 },
-  { id: "D6", x: 480, y: 440 }
+  { id: "D1", x: 420, y: 415 },
+  { id: "D2", x: 420, y: 460 },
+  { id: "D3", x: 450, y: 390 },
+  { id: "D5", x: 480, y: 460 },
+  { id: "D6", x: 480, y: 415 }
 ];
 
 // bridges
@@ -61,15 +61,13 @@ const landCenters = {
   A: { x: 250, y: 250 },
   B: { x: 655, y: 250 },
   C: { x: 450, y: 100 },
-  D: { x: 450, y: 460 }
+  D: { x: 450, y: 430 }
 };
 
 // colors
 const backgroundColor = "#007bff";
 const bridgeColor = "gold";
 const nodeColor = "#8B4513";
-const textColor = "#000";
-const landOutline = "#000";
 
 let currentLand = null;
 let currentNode = null;
@@ -77,7 +75,7 @@ let usedBridges = [];
 let moveHistory = [];
 let gameOver = false;
 
-// helpers
+// helper functions
 function getNode(id) {
   return nodes.find(n => n.id === id);
 }
@@ -94,6 +92,16 @@ function checkIfStranded(land) {
   return !available;
 }
 
+// manage buttons
+function updateButtons() {
+  if (gameOver && checkIfStranded(currentLand)) {
+    undoBtn.disabled = true;  
+  } else {
+    undoBtn.disabled = moveHistory.length === 0; 
+  }
+  resetBtn.disabled = false;  
+}
+
 function drawGame() {
   ctx.fillStyle = backgroundColor;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -105,17 +113,29 @@ function drawGame() {
     ctx.beginPath();
     ctx.arc(x, y, size, 0, Math.PI * 2);
     ctx.fillStyle = nodeColor;
-    ctx.strokeStyle = landOutline;
-    ctx.lineWidth = 3;
+    ctx.strokeStyle = "#9d5b19ff";
+    ctx.lineWidth = 8;
     ctx.fill();
     ctx.stroke();
 
-    ctx.fillStyle = "#000";
+    ctx.fillStyle = "#ffffffff";
     ctx.font = "bold 20px Arial";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(label, x, y);
   });
+
+  // highlight current land
+  if (currentLand) {
+    const pos = landCenters[currentLand];
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, 60, 0, Math.PI * 2);
+    ctx.strokeStyle = "lime";
+    ctx.lineWidth = 4;
+    ctx.setLineDash([10, 5]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
 
   // draw bridges
   bridges.forEach(b => {
@@ -133,8 +153,8 @@ function drawGame() {
 
     const midX = (a.x + c.x) / 2;
     const midY = (a.y + c.y) / 2;
-    ctx.fillStyle = textColor;
-    ctx.font = "bold 16px Arial";
+    ctx.fillStyle = "#492d12ff";
+    ctx.font = "bold 20px Arial";
     ctx.fillText(b.num, midX + 5, midY - 5);
   });
 
@@ -170,6 +190,8 @@ function drawGame() {
     ctx.lineWidth = 8;
     ctx.stroke();
   });
+
+  updateButtons(); // ensure buttons are updated
 }
 
 canvas.addEventListener("click", e => {
@@ -245,9 +267,9 @@ canvas.addEventListener("click", e => {
   }
 });
 
-// Undo
+// undo
 undoBtn.addEventListener("click", () => {
-  if (moveHistory.length === 0) return;
+  if (moveHistory.length === 0 || gameOver) return; 
   const lastMove = moveHistory.pop();
   usedBridges = usedBridges.filter(b => b !== lastMove.bridgeNum);
   currentNode = getNode(lastMove.previousNodeId);
@@ -257,7 +279,7 @@ undoBtn.addEventListener("click", () => {
   drawGame();
 });
 
-// Reset
+// reset
 resetBtn.addEventListener("click", () => {
   usedBridges = [];
   currentNode = null;
